@@ -29,7 +29,7 @@ class App:
 
         # Configurar el icono global de la app
         try:
-            self.app_icon = ImageTk.PhotoImage(Image.open("assets/logo_app.png"))
+            self.app_icon = ImageTk.PhotoImage(Image.open("logoTraslucido.png"))
             self.root.iconphoto(True, self.app_icon)
         except Exception:
             pass
@@ -75,8 +75,20 @@ class App:
 
         # Cargar y redimensionar el logo
         try:
-            raw_logo = Image.open("assets/logo_app.png")
+            raw_logo = Image.open("logoTraslucido.png")
             logo_resized = raw_logo.resize((48, 48), Image.Resampling.LANCZOS)
+            
+            # Procesar la imagen para que sea compatible con transparentcolor (eliminar semitransparencias)
+            logo_resized = logo_resized.convert("RGBA")
+            pixels = list(logo_resized.getdata())
+            new_pixels = []
+            for p in pixels:
+                if p[3] < 128:
+                    new_pixels.append((255, 0, 255, 255))  # Magenta puro (transparente en Windows)
+                else:
+                    new_pixels.append((p[0], p[1], p[2], 255))  # Totalmente opaco
+            logo_resized.putdata(new_pixels)
+            
             self.logo_img = ImageTk.PhotoImage(logo_resized)
         except Exception:
             self.logo_img = None
@@ -85,14 +97,16 @@ class App:
         self.btn_win.configure(bg=transparent_color)
         try:
             self.btn_win.attributes("-transparentcolor", transparent_color)
+            self.btn_win.attributes("-alpha", 0.35)  # Opacidad por defecto discreta (35%)
         except tk.TclError:
             pass
 
-        self.btn = tk.Button(
+        # Usamos tk.Label en lugar de tk.Button para evitar bordes o relieves del tema del OS
+        # que arruinarían la transparencia de color de Tkinter.
+        self.btn = tk.Label(
             self.btn_win, image=self.logo_img,
-            bg=transparent_color, activebackground=transparent_color,
-            bd=0, highlightthickness=0, relief="flat",
-            command=self._on_button_click,
+            bg=transparent_color,
+            bd=0, highlightthickness=0,
         )
         self.btn.pack(padx=4, pady=4)
 
@@ -110,6 +124,10 @@ class App:
         self.menu.add_command(label="Salir", command=self.root.destroy)
         self.btn.bind("<Button-3>", self._show_menu)
 
+        # Eventos hover para cambiar la opacidad
+        self.btn.bind("<Enter>", self._on_button_enter)
+        self.btn.bind("<Leave>", self._on_button_leave)
+
         self._was_drag = False
 
     def _start_drag(self, event):
@@ -126,10 +144,23 @@ class App:
         self.btn_win.geometry(f"+{x}+{y}")
 
     def _end_drag(self, event):
-        pass  # el click real se maneja en _on_button_click, solo si no hubo arrastre
+        if not self._was_drag:
+            self._on_button_click()
 
     def _show_menu(self, event):
         self.menu.tk_popup(event.x_root, event.y_root)
+
+    def _on_button_enter(self, event):
+        try:
+            self.btn_win.attributes("-alpha", 0.95)  # Se vuelve opaco al pasar el mouse
+        except tk.TclError:
+            pass
+
+    def _on_button_leave(self, event):
+        try:
+            self.btn_win.attributes("-alpha", 0.35)  # Se desvanece de nuevo al salir
+        except tk.TclError:
+            pass
 
     # ---------- Lógica principal ----------
 

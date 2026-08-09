@@ -89,7 +89,7 @@ def ask_about_image(image_bytes: bytes, api_key: str, extra_instruction: str = "
         # Detectar filtro de derechos de autor (RECITATION)
         if candidate.get("finishReason") == "RECITATION":
             return (
-                "⚠️ Respuesta bloqueada por el filtro de derechos de autor (RECITATION).\n\n"
+                "Respuesta bloqueada por el filtro de derechos de autor (RECITATION).\n\n"
                 "Para evitarlo:\n"
                 "1. La IA ha sido configurada ahora con mayor temperatura y orden de parafrasear.\n"
                 "2. Intenta capturar un área ligeramente distinta o más pequeña.\n"

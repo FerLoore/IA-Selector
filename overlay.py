@@ -94,8 +94,9 @@ class FixedFrame:
 
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
+        self.current_alpha = 0.05
         try:
-            self.win.attributes("-alpha", 0.45)  # Hacer que la ventana/borde sea semi-transparente (45% opacidad)
+            self.win.attributes("-alpha", self.current_alpha)  # Empezar con opacidad muy baja (5%)
         except tk.TclError:
             pass
 
@@ -112,6 +113,9 @@ class FixedFrame:
 
         self.win.update_idletasks()
         make_click_through(self.win)
+
+        # Iniciar el bucle de seguimiento de distancia del mouse
+        self._poll_mouse()
 
     def set_region(self, bbox):
         left, top, right, bottom = bbox
@@ -153,3 +157,53 @@ class FixedFrame:
 
     def destroy(self):
         self.win.destroy()
+
+    def _poll_mouse(self):
+        try:
+            if not self.win.winfo_exists():
+                return
+        except tk.TclError:
+            return
+
+        # Obtener coordenadas absolutas/globales del mouse en pantalla
+        px = self.win.winfo_pointerx()
+        py = self.win.winfo_pointery()
+
+        left, top, right, bottom = self.bbox
+
+        # Calcular la distancia más corta del cursor a los bordes del recuadro
+        # Distancia en X
+        if px < left:
+            dx = left - px
+        elif px > right:
+            dx = px - right
+        else:
+            dx = 0
+
+        # Distancia en Y
+        if py < top:
+            dy = top - py
+        elif py > bottom:
+            dy = py - bottom
+        else:
+            dy = 0
+
+        # Distancia euclidiana aproximada
+        distance = (dx * dx + dy * dy) ** 0.5
+
+        # Si el mouse se acerca a menos de 50px de algún borde, el marco se vuelve visible
+        if distance < 50:
+            target_alpha = 0.70  # Visible / claro
+        else:
+            target_alpha = 0.05  # Casi imperceptible / muy discreto
+
+        # Suavizado de la transición (easing simple de 25% por paso)
+        if abs(self.current_alpha - target_alpha) > 0.01:
+            self.current_alpha += (target_alpha - self.current_alpha) * 0.25
+            try:
+                self.win.attributes("-alpha", self.current_alpha)
+            except tk.TclError:
+                pass
+
+        # Volver a consultar en 50 milisegundos (~20 FPS)
+        self.win.after(50, self._poll_mouse)
