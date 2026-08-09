@@ -55,7 +55,7 @@ class RegionPicker:
             self.canvas.delete(self.rect_id)
         self.rect_id = self.canvas.create_rectangle(
             self.start_x, self.start_y, self.start_x, self.start_y,
-            outline="red", width=3,
+            outline="#4da3ff", width=2,
         )
 
     def _on_drag(self, event):
@@ -85,7 +85,7 @@ class RegionPicker:
 
 
 class FixedFrame:
-    """Marco rojo permanente alrededor de la región elegida. No bloquea clics."""
+    """Marco sutil y semi-transparente alrededor de la región elegida. No bloquea clics."""
 
     def __init__(self, root: tk.Tk, bbox):
         self.root = root
@@ -94,6 +94,10 @@ class FixedFrame:
 
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
+        try:
+            self.win.attributes("-alpha", 0.45)  # Hacer que la ventana/borde sea semi-transparente (45% opacidad)
+        except tk.TclError:
+            pass
 
         transparent = "magenta"  # color "clave" que se vuelve invisible
         self.win.configure(bg=transparent)
@@ -118,7 +122,29 @@ class FixedFrame:
         self.canvas.delete("all")
         w = self.bbox[2] - self.bbox[0]
         h = self.bbox[3] - self.bbox[1]
-        self.canvas.create_rectangle(2, 2, w - 2, h - 2, outline="red", width=4)
+        
+        # Parámetros para un borde redondeado y discreto (color blanco con alpha general de 0.45)
+        r = 8  # Radio de esquinas redondeadas
+        color = "#ffffff"
+        width = 2
+        
+        # Evitar errores si la selección es más pequeña que el doble del radio
+        r = min(r, w // 2, h // 2)
+
+        if r > 0:
+            # 4 bordes rectos rectangulares
+            self.canvas.create_line(2 + r, 2, w - 2 - r, 2, fill=color, width=width)
+            self.canvas.create_line(2 + r, h - 2, w - 2 - r, h - 2, fill=color, width=width)
+            self.canvas.create_line(2, 2 + r, 2, h - 2 - r, fill=color, width=width)
+            self.canvas.create_line(w - 2, 2 + r, w - 2, h - 2 - r, fill=color, width=width)
+
+            # 4 arcos para lograr las esquinas redondeadas
+            self.canvas.create_arc(2, 2, 2 + 2*r, 2 + 2*r, start=90, extent=90, style="arc", outline=color, width=width)
+            self.canvas.create_arc(w - 2 - 2*r, 2, w - 2, 2 + 2*r, start=0, extent=90, style="arc", outline=color, width=width)
+            self.canvas.create_arc(2, h - 2 - 2*r, 2 + 2*r, h - 2, start=180, extent=90, style="arc", outline=color, width=width)
+            self.canvas.create_arc(w - 2 - 2*r, h - 2 - 2*r, w - 2, h - 2, start=270, extent=90, style="arc", outline=color, width=width)
+        else:
+            self.canvas.create_rectangle(2, 2, w - 2, h - 2, outline=color, width=width)
 
     def update_region(self, bbox):
         self.set_region(bbox)

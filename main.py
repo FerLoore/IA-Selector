@@ -14,7 +14,7 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 
 # pyrefly: ignore [missing-import]
-from PIL import ImageGrab
+from PIL import ImageGrab, Image, ImageTk
 
 import config
 from ai_client import ask_about_image
@@ -26,6 +26,13 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.withdraw()  # no mostramos ventana principal, solo el botón
+
+        # Configurar el icono global de la app
+        try:
+            self.app_icon = ImageTk.PhotoImage(Image.open("assets/logo_app.png"))
+            self.root.iconphoto(True, self.app_icon)
+        except Exception:
+            pass
 
         self.api_key = config.load_api_key()
         if not self.api_key:
@@ -66,12 +73,28 @@ class App:
         self.btn_win.attributes("-topmost", True)
         self.btn_win.geometry("56x56+40+200")
 
+        # Cargar y redimensionar el logo
+        try:
+            raw_logo = Image.open("assets/logo_app.png")
+            logo_resized = raw_logo.resize((48, 48), Image.Resampling.LANCZOS)
+            self.logo_img = ImageTk.PhotoImage(logo_resized)
+        except Exception:
+            self.logo_img = None
+
+        transparent_color = "magenta"
+        self.btn_win.configure(bg=transparent_color)
+        try:
+            self.btn_win.attributes("-transparentcolor", transparent_color)
+        except tk.TclError:
+            pass
+
         self.btn = tk.Button(
-            self.btn_win, text="IA", font=("Segoe UI", 14, "bold"),
-            bg="#4da3ff", fg="white", activebackground="#2f86e0",
-            relief="flat", command=self._on_button_click,
+            self.btn_win, image=self.logo_img,
+            bg=transparent_color, activebackground=transparent_color,
+            bd=0, highlightthickness=0, relief="flat",
+            command=self._on_button_click,
         )
-        self.btn.pack(fill="both", expand=True)
+        self.btn.pack(padx=4, pady=4)
 
         # Arrastrar el botón
         self._drag_data = {"x": 0, "y": 0}
