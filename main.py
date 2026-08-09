@@ -123,7 +123,9 @@ class App:
             self._capture_and_analyze()
 
     def _pick_region(self):
-        RegionPicker(self.root, on_region_selected=self._on_region_selected)
+        # Retardo de 180ms para garantizar que el click del botón original se procese
+        # por completo antes de mapear la ventana de selección.
+        self.root.after(180, lambda: RegionPicker(self.root, on_region_selected=self._on_region_selected))
 
     def _on_region_selected(self, bbox):
         self.region = bbox

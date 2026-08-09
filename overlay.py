@@ -27,6 +27,7 @@ class RegionPicker:
         self.overlay.attributes("-topmost", True)
         self.overlay.configure(bg="black")
         self.overlay.config(cursor="cross")
+        self.overlay.focus_force()
 
         self.canvas = tk.Canvas(self.overlay, bg="black", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
@@ -58,19 +59,28 @@ class RegionPicker:
         )
 
     def _on_drag(self, event):
+        if self.start_x is None or self.start_y is None:
+            return
         self.canvas.coords(self.rect_id, self.start_x, self.start_y, event.x, event.y)
 
     def _on_release(self, event):
+        if self.start_x is None or self.start_y is None:
+            return
         x1, y1 = self.start_x, self.start_y
         x2, y2 = event.x, event.y
         left, top = min(x1, x2), min(y1, y2)
         right, bottom = max(x1, x2), max(y1, y2)
 
-        self.overlay.destroy()
-
         if right - left < 10 or bottom - top < 10:
-            return  # selección demasiado pequeña, se ignora
+            # Si el trazo es muy chico (ej: click accidental), no cerramos la ventana.
+            # Borramos el rectángulo dibujado y permitimos reintentar el trazo.
+            if self.rect_id:
+                self.canvas.delete(self.rect_id)
+            self.start_x = None
+            self.start_y = None
+            return
 
+        self.overlay.destroy()
         self.on_region_selected((left, top, right, bottom))
 
 
@@ -106,8 +116,8 @@ class FixedFrame:
 
     def _draw_border(self):
         self.canvas.delete("all")
-        w = self.win.winfo_width() or (self.bbox[2] - self.bbox[0])
-        h = self.win.winfo_height() or (self.bbox[3] - self.bbox[1])
+        w = self.bbox[2] - self.bbox[0]
+        h = self.bbox[3] - self.bbox[1]
         self.canvas.create_rectangle(2, 2, w - 2, h - 2, outline="red", width=4)
 
     def update_region(self, bbox):
