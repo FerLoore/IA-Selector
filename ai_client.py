@@ -11,7 +11,7 @@ import json
 import urllib.request
 import urllib.error
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.6-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
 SYSTEM_PROMPT = (
@@ -27,7 +27,10 @@ SYSTEM_PROMPT = (
     "- Si no hay una tarea clara, describe brevemente qué se ve y ofrece la "
     "información más útil posible.\n"
     "Responde siempre en español, de forma directa y concisa. No repitas la "
-    "pregunta, ve directo a la respuesta."
+    "pregunta, ve directo a la respuesta.\n"
+    "IMPORTANTE: Para evitar activar filtros de derechos de autor (recitation), "
+    "NUNCA copies textos extensos o códigos protegidos de forma exacta. Explica, "
+    "resume y parafrasea siempre usando tus propias palabras."
 )
 
 
@@ -54,6 +57,9 @@ def ask_about_image(image_bytes: bytes, api_key: str, extra_instruction: str = "
                 ],
             }
         ],
+        "generationConfig": {
+            "temperature": 1.0
+        }
     }
 
     data = json.dumps(payload).encode("utf-8")
@@ -78,7 +84,19 @@ def ask_about_image(image_bytes: bytes, api_key: str, extra_instruction: str = "
 
     try:
         candidates = result["candidates"]
-        parts = candidates[0]["content"]["parts"]
+        candidate = candidates[0]
+        
+        # Detectar filtro de derechos de autor (RECITATION)
+        if candidate.get("finishReason") == "RECITATION":
+            return (
+                "⚠️ Respuesta bloqueada por el filtro de derechos de autor (RECITATION).\n\n"
+                "Para evitarlo:\n"
+                "1. La IA ha sido configurada ahora con mayor temperatura y orden de parafrasear.\n"
+                "2. Intenta capturar un área ligeramente distinta o más pequeña.\n"
+                "3. Si es una pregunta de opción múltiple o examen, asegúrate de que no incluya logotipos o marcas de copyright de la plataforma."
+            )
+            
+        parts = candidate["content"]["parts"]
         text = "\n".join(p.get("text", "") for p in parts).strip()
         return text or "(La IA no devolvió texto)"
     except (KeyError, IndexError):
