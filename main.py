@@ -18,7 +18,7 @@ from PIL import ImageGrab, Image, ImageTk
 
 import config
 from ai_client import ask_about_image
-from overlay import RegionPicker, FixedFrame
+from overlay import RegionPicker, FixedFrame, OptionHighlight
 from result_window import ResultWindow
 
 
@@ -202,14 +202,33 @@ class App:
 
         def worker():
             try:
-                answer = ask_about_image(image_bytes, self.api_key)
+                answer, box = ask_about_image(image_bytes, self.api_key)
             except Exception as exc:  # noqa: BLE001
                 err_msg = str(exc)
                 self.root.after(0, lambda: result_win.show_error(err_msg))
                 return
             self.root.after(0, lambda: result_win.show_result(answer))
+            if box:
+                self.root.after(0, lambda: self._highlight_correct_option(box))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _highlight_correct_option(self, box):
+        if not self.region:
+            return
+        left, top, right, bottom = self.region
+        w = right - left
+        h = bottom - top
+        
+        # box es [ymin, xmin, ymax, xmax] normalizados en [0, 1000]
+        ymin, xmin, ymax, xmax = box
+        
+        opt_left = left + int((xmin / 1000.0) * w)
+        opt_top = top + int((ymin / 1000.0) * h)
+        opt_right = left + int((xmax / 1000.0) * w)
+        opt_bottom = top + int((ymax / 1000.0) * h)
+        
+        OptionHighlight(self.root, (opt_left, opt_top, opt_right, opt_bottom))
 
 
 if __name__ == "__main__":

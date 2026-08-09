@@ -207,3 +207,57 @@ class FixedFrame:
 
         # Volver a consultar en 50 milisegundos (~20 FPS)
         self.win.after(50, self._poll_mouse)
+
+
+class OptionHighlight:
+    """Muestra un brillo disimulado (destello verde translúcido y temporal)
+    sobre la respuesta correcta en pantalla. Es click-through y se auto-destruye."""
+
+    def __init__(self, root: tk.Tk, screen_bbox):
+        self.win = tk.Toplevel(root)
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        
+        left, top, right, bottom = screen_bbox
+        w = right - left
+        h = bottom - top
+        self.win.geometry(f"{w}x{h}+{left}+{top}")
+        
+        # Color del brillo: verde lima suave y discreto
+        self.win.configure(bg="#2ecc71")
+        
+        # Iniciar invisible
+        self.alpha = 0.0
+        try:
+            self.win.attributes("-alpha", self.alpha)
+        except tk.TclError:
+            pass
+            
+        self.win.update_idletasks()
+        make_click_through(self.win)
+        
+        # Iniciar animación de fade-in
+        self._fade_in()
+        
+    def _fade_in(self):
+        if self.alpha < 0.30:  # Opacidad muy discreta (30%)
+            self.alpha += 0.05
+            try:
+                self.win.attributes("-alpha", self.alpha)
+            except tk.TclError:
+                pass
+            self.win.after(20, self._fade_in)
+        else:
+            # Esperar 3.5 segundos y luego iniciar fade-out
+            self.win.after(3500, self._fade_out)
+            
+    def _fade_out(self):
+        if self.alpha > 0.0:
+            self.alpha -= 0.03
+            try:
+                self.win.attributes("-alpha", self.alpha)
+            except tk.TclError:
+                pass
+            self.win.after(25, self._fade_out)
+        else:
+            self.win.destroy()
