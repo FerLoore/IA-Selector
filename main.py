@@ -40,6 +40,8 @@ class App:
 
         self.region = None  # (left, top, right, bottom)
         self.fixed_frame = None
+        self.current_result_win = None
+        self.current_highlight = None
 
         self._build_floating_button()
         self.root.mainloop()
@@ -198,7 +200,16 @@ class App:
         screenshot.save(buffer, format="PNG")
         image_bytes = buffer.getvalue()
 
+        # Cerrar la ventana anterior si existe y está abierta
+        if self.current_result_win and self.current_result_win.win.winfo_exists():
+            try:
+                self.current_result_win.win.destroy()
+            except Exception:
+                pass
+        self.current_result_win = None
+
         result_win = ResultWindow(self.root)
+        self.current_result_win = result_win
 
         def worker():
             try:
@@ -214,6 +225,14 @@ class App:
         threading.Thread(target=worker, daemon=True).start()
 
     def _highlight_correct_option(self, box):
+        # Cerrar el brillo anterior si existe y está abierto
+        if self.current_highlight and self.current_highlight.win.winfo_exists():
+            try:
+                self.current_highlight.win.destroy()
+            except Exception:
+                pass
+        self.current_highlight = None
+
         if not self.region:
             return
         left, top, right, bottom = self.region
@@ -228,7 +247,7 @@ class App:
         opt_right = left + int((xmax / 1000.0) * w)
         opt_bottom = top + int((ymax / 1000.0) * h)
         
-        OptionHighlight(self.root, (opt_left, opt_top, opt_right, opt_bottom))
+        self.current_highlight = OptionHighlight(self.root, (opt_left, opt_top, opt_right, opt_bottom))
 
 
 if __name__ == "__main__":
