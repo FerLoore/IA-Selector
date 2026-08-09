@@ -10,7 +10,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.j
 
 def load_api_key() -> str | None:
     # 1) Variable de entorno tiene prioridad
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    key = os.environ.get("GEMINI_API_KEY")
     if key:
         return key
 
