@@ -148,7 +148,8 @@ class App:
             try:
                 answer = ask_about_image(image_bytes, self.api_key)
             except Exception as exc:  # noqa: BLE001
-                self.root.after(0, lambda: result_win.show_error(str(exc)))
+                err_msg = str(exc)
+                self.root.after(0, lambda: result_win.show_error(err_msg))
                 return
             self.root.after(0, lambda: result_win.show_result(answer))
 
