@@ -43,6 +43,10 @@ class App:
         self.current_result_win = None
         self.current_highlight = None
 
+        # Cargar y registrar el atajo de teclado global
+        self.hotkey = config.load_hotkey()
+        self._register_global_hotkey()
+
         self._build_floating_button()
         self.root.mainloop()
 
@@ -122,6 +126,7 @@ class App:
         self.menu = tk.Menu(self.btn_win, tearoff=0)
         self.menu.add_command(label="Cambiar área", command=self._change_region)
         self.menu.add_command(label="Cambiar API key", command=self._ask_for_api_key)
+        self.menu.add_command(label="Cambiar atajo de teclado", command=self._change_hotkey)
         self.menu.add_separator()
         self.menu.add_command(label="Salir", command=self.root.destroy)
         self.btn.bind("<Button-3>", self._show_menu)
@@ -248,6 +253,68 @@ class App:
         opt_bottom = top + int((ymax / 1000.0) * h)
         
         self.current_highlight = OptionHighlight(self.root, (opt_left, opt_top, opt_right, opt_bottom))
+
+    def _register_global_hotkey(self):
+        try:
+            import keyboard
+            keyboard.clear_all_hotkeys()
+        except Exception:
+            pass
+
+        if self.hotkey:
+            try:
+                import keyboard
+                # Registramos el atajo global. Dado que corre en un hilo secundario de la librería keyboard,
+                # usamos self.root.after(0, ...) para invocar la lógica principal de forma segura en el hilo de Tkinter.
+                keyboard.add_hotkey(self.hotkey, lambda: self.root.after(0, self._on_hotkey_pressed))
+            except Exception as e:
+                print(f"Error registrando atajo: {e}")
+
+    def _on_hotkey_pressed(self):
+        if not self.api_key:
+            self._ask_for_api_key()
+            if not self.api_key:
+                return
+        if self.region is None:
+            self._pick_region()
+        else:
+            self._capture_and_analyze()
+
+    def _change_hotkey(self):
+        self.root.deiconify()
+        self.root.withdraw()
+        
+        # Le pedimos al usuario el nuevo atajo
+        new_key = simpledialog.askstring(
+            "Configurar Atajo de Teclado",
+            f"Escribe el nuevo atajo global (ej: ctrl+shift+s, ctrl+alt+q):\n\nAtajo actual: {self.hotkey}",
+            parent=self.root
+        )
+        
+        if new_key is not None:
+            new_key = new_key.strip().lower()
+            if new_key:
+                # Validar el atajo intentando parsearlo
+                try:
+                    import keyboard
+                    keyboard.parse_hotkey(new_key)
+                    
+                    # Guardar y registrar
+                    config.save_hotkey(new_key)
+                    self.hotkey = new_key
+                    self._register_global_hotkey()
+                    
+                    messagebox.showinfo(
+                        "Atajo configurado",
+                        f"Atajo de teclado global guardado y activo: {self.hotkey}",
+                        parent=self.root
+                    )
+                except Exception as e:
+                    messagebox.showerror(
+                        "Atajo inválido",
+                        f"El atajo '{new_key}' no es válido.\nError: {e}\n\nIntenta algo como 'ctrl+shift+s' o 'ctrl+alt+q'.",
+                        parent=self.root
+                    )
 
 
 if __name__ == "__main__":
