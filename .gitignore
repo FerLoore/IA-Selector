@@ -1,0 +1,10 @@
+# Configuración local sensible
+config.json
+
+# Cache de Python
+__pycache__/
+*.pyc
+
+# Archivos de agentes de desarrollo
+.agents/
+.gemini/
