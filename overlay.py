@@ -94,9 +94,9 @@ class FixedFrame:
 
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
-        self.current_alpha = 0.05
+        self.current_alpha = 0.0
         try:
-            self.win.attributes("-alpha", self.current_alpha)  # Empezar con opacidad muy baja (5%)
+            self.win.attributes("-alpha", self.current_alpha)  # Empezar completamente transparente (0%)
         except tk.TclError:
             pass
 
@@ -191,11 +191,11 @@ class FixedFrame:
         # Distancia euclidiana aproximada
         distance = (dx * dx + dy * dy) ** 0.5
 
-        # Si el mouse se acerca a menos de 50px de algún borde, el marco se vuelve visible
-        if distance < 50:
-            target_alpha = 0.70  # Visible / claro
+        # Si el mouse se acerca a menos de 30px de algún borde, el marco se vuelve visible de forma sutil
+        if distance < 30:
+            target_alpha = 0.35  # Sutil
         else:
-            target_alpha = 0.05  # Casi imperceptible / muy discreto
+            target_alpha = 0.0   # Completamente invisible / transparente
 
         # Suavizado de la transición (easing simple de 25% por paso)
         if abs(self.current_alpha - target_alpha) > 0.01:
