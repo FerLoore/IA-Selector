@@ -131,6 +131,21 @@ class ResultWindow:
         self.text.insert("1.0", "Analizando la captura, un momento...")
         self.text.config(state="disabled")
 
+        # Agarrador de redimensionamiento (resize grip) discreto en la esquina inferior derecha
+        self.grip = tk.Canvas(
+            self.container, width=10, height=10,
+            bg="#121214", bd=0, highlightthickness=0,
+            cursor="size_nw_se"
+        )
+        self.grip.place(relx=1.0, rely=1.0, anchor="se")
+        
+        # Dibujar líneas diagonales clásicas de grip en el canvas
+        self.grip.create_line(10, 4, 4, 10, fill="#4a4a4f")
+        self.grip.create_line(10, 7, 7, 10, fill="#4a4a4f")
+
+        self.grip.bind("<ButtonPress-1>", self._start_resize)
+        self.grip.bind("<B1-Motion>", self._do_resize)
+
         # Binds para opacidad adaptativa en hover
         self.win.bind("<Enter>", self._on_enter)
         self.win.bind("<Leave>", self._on_leave)
@@ -163,6 +178,30 @@ class ResultWindow:
         y = self.win.winfo_y() + dy
         self.win.geometry(f"+{x}+{y}")
 
+    def _start_resize(self, event):
+        self._resize_start_x = event.x_root
+        self._resize_start_y = event.y_root
+        self._resize_start_w = self.win.winfo_width()
+        self._resize_start_h = self.win.winfo_height()
+
+    def _do_resize(self, event):
+        dx = event.x_root - self._resize_start_x
+        dy = event.y_root - self._resize_start_y
+        
+        new_w = max(250, self._resize_start_w + dx)
+        new_h = max(100, self._resize_start_h + dy)
+        
+        x = self.win.winfo_x()
+        y = self.win.winfo_y()
+        
+        if not self.collapsed:
+            self.width = new_w
+            self.height = new_h
+            self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
+        else:
+            self.width = new_w
+            self.win.geometry(f"{self.width}x28+{x}+{y}")
+
     def _copy_to_clipboard(self):
         self.win.clipboard_clear()
         self.win.clipboard_append(self.text.get("1.0", "end-1c"))
@@ -173,16 +212,18 @@ class ResultWindow:
         self.win.after(1500, lambda: self.copy_btn.config(text="Copiar", fg="#8a8a8f"))
 
     def _toggle_collapse(self):
+        x = self.win.winfo_x()
+        y = self.win.winfo_y()
         if self.collapsed:
             # Expandir a tamaño completo
-            self.win.geometry(f"{self.width}x{self.height}")
+            self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
             self.collapse_btn.config(text="▲")
             self.collapsed = False
         else:
             # Colapsar a barra de título
             self.width = self.win.winfo_width()
             self.height = self.win.winfo_height()
-            self.win.geometry(f"{self.width}x28")
+            self.win.geometry(f"{self.width}x28+{x}+{y}")
             self.collapse_btn.config(text="▼")
             self.collapsed = True
 
