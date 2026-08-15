@@ -9,6 +9,8 @@ Flujo:
 5. Clic derecho sobre el botón: menú para cambiar de área o salir.
 """
 import io
+import os
+import sys
 import threading
 import tkinter as tk
 from tkinter import simpledialog, messagebox
@@ -22,6 +24,16 @@ from overlay import RegionPicker, FixedFrame, OptionHighlight
 from result_window import ResultWindow
 
 
+def get_resource_path(relative_path):
+    """Obtiene la ruta absoluta para un recurso, compatible con desarrollo y PyInstaller"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller crea una carpeta temporal y guarda la ruta en _MEIPASS
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+
 class App:
     def __init__(self):
         self.root = tk.Tk()
@@ -29,7 +41,7 @@ class App:
 
         # Configurar el icono global de la app
         try:
-            self.app_icon = ImageTk.PhotoImage(Image.open("logoTraslucido.png"))
+            self.app_icon = ImageTk.PhotoImage(Image.open(get_resource_path("logoTraslucido.png")))
             self.root.iconphoto(True, self.app_icon)
         except Exception:
             pass
@@ -42,6 +54,8 @@ class App:
         self.fixed_frame = None
         self.current_result_win = None
         self.current_highlight = None
+        self.hover_timer = None
+        self.is_analyzing = False
 
         # Cargar y registrar el atajo de teclado global
         self.hotkey = config.load_hotkey()
@@ -81,7 +95,7 @@ class App:
 
         # Cargar y redimensionar el logo
         try:
-            raw_logo = Image.open("logoTraslucido.png")
+            raw_logo = Image.open(get_resource_path("logoTraslucido.png"))
             logo_resized = raw_logo.resize((48, 48), Image.Resampling.LANCZOS)
             
             # Procesar la imagen para que sea compatible con transparentcolor (eliminar semitransparencias)
@@ -140,6 +154,11 @@ class App:
     def _start_drag(self, event):
         self._drag_data = {"x": event.x, "y": event.y}
         self._was_drag = False
+        
+        # Cancelar el temporizador de hover si se empieza a arrastrar el botón
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+            self.hover_timer = None
 
     def _do_drag(self, event):
         dx = event.x - self._drag_data["x"]
@@ -162,18 +181,49 @@ class App:
             self.btn_win.attributes("-alpha", 0.95)  # Se vuelve opaco al pasar el mouse
         except tk.TclError:
             pass
+            
+        # Iniciar temporizador para activar la IA automáticamente al pasar el mouse (hover)
+        # Esperamos 250ms para evitar disparos accidentales mientras arrastras el botón
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+        self.hover_timer = self.root.after(250, self._on_hover_trigger)
 
     def _on_button_leave(self, event):
         try:
             self.btn_win.attributes("-alpha", 0.35)  # Se desvanece de nuevo al salir
         except tk.TclError:
             pass
+            
+        # Cancelar el temporizador si el mouse sale antes de que se dispare
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+            self.hover_timer = None
 
     # ---------- Lógica principal ----------
 
     def _on_button_click(self):
         if self._was_drag:
             return  # fue un arrastre, no un clic real
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+            self.hover_timer = None
+        if self.is_analyzing:
+            return
+            
+        if not self.api_key:
+            self._ask_for_api_key()
+            if not self.api_key:
+                return
+        if self.region is None:
+            self._pick_region()
+        else:
+            self._capture_and_analyze()
+
+    def _on_hover_trigger(self):
+        self.hover_timer = None
+        if self.is_analyzing:
+            return
+            
         if not self.api_key:
             self._ask_for_api_key()
             if not self.api_key:
@@ -205,16 +255,15 @@ class App:
         screenshot.save(buffer, format="PNG")
         image_bytes = buffer.getvalue()
 
-        # Cerrar la ventana anterior si existe y está abierta
+        # Si ya existe la ventana de resultados y está abierta, la reutilizamos y conservamos su posición
         if self.current_result_win and self.current_result_win.win.winfo_exists():
-            try:
-                self.current_result_win.win.destroy()
-            except Exception:
-                pass
-        self.current_result_win = None
-
-        result_win = ResultWindow(self.root)
-        self.current_result_win = result_win
+            result_win = self.current_result_win
+            result_win.show_loading()
+        else:
+            result_win = ResultWindow(self.root)
+            self.current_result_win = result_win
+        
+        self.is_analyzing = True
 
         def worker():
             try:
@@ -222,12 +271,17 @@ class App:
             except Exception as exc:  # noqa: BLE001
                 err_msg = str(exc)
                 self.root.after(0, lambda: result_win.show_error(err_msg))
+                self.root.after(0, self._set_analyzing_false)
                 return
             self.root.after(0, lambda: result_win.show_result(answer))
             if box:
                 self.root.after(0, lambda: self._highlight_correct_option(box))
+            self.root.after(0, self._set_analyzing_false)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _set_analyzing_false(self):
+        self.is_analyzing = False
 
     def _highlight_correct_option(self, box):
         # Cerrar el brillo anterior si existe y está abierto
@@ -271,6 +325,8 @@ class App:
                 print(f"Error registrando atajo: {e}")
 
     def _on_hotkey_pressed(self):
+        if self.is_analyzing:
+            return
         if not self.api_key:
             self._ask_for_api_key()
             if not self.api_key:

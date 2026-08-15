@@ -4,8 +4,16 @@ La guarda en un archivo config.json en la misma carpeta (NO la subas a git).
 """
 import json
 import os
+import sys
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+if getattr(sys, 'frozen', False):
+    # Si está empaquetado con PyInstaller, guardamos config.json junto al ejecutable (.exe)
+    base_dir = os.path.dirname(sys.executable)
+else:
+    # Si se ejecuta desde el código fuente (.py)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_PATH = os.path.join(base_dir, "config.json")
 
 
 def load_config() -> dict:

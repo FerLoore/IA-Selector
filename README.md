@@ -56,8 +56,8 @@ La aplicación utiliza el modelo **Gemini 3.5 Flash**, el cual cuenta con una cu
 Si quieres abrirla con doble clic sin usar la terminal:
 
 ```powershell
-pip install pyinstaller
-pyinstaller --onefile --noconsole --name "IA-Selector" main.py
+pyinstaller --clean IA-Selector.spec
+python -m PyInstaller --clean IA-Selector.spec
 ```
 
 El ejecutable queda en la carpeta `dist/`. Cópialo junto con tu `config.json` y `logoTraslucido.png` en el mismo directorio.
