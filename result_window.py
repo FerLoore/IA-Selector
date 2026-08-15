@@ -16,7 +16,8 @@ class ResultWindow:
         # Dimensiones por defecto
         self.width = 420
         self.height = 260
-        self.collapsed = False
+        self.collapsed = True
+        self.is_pinned = False
 
         # Posicionamiento inteligente cerca del cursor del mouse, sin salirse de la pantalla
         mx = root.winfo_pointerx()
@@ -25,7 +26,7 @@ class ResultWindow:
         screen_h = root.winfo_screenheight()
         x = max(10, min(mx + 20, screen_w - self.width - 20))
         y = max(10, min(my + 10, screen_h - self.height - 40))
-        self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
+        self.win.geometry(f"{self.width}x28+{x}+{y}")
 
         # Opacidad adaptativa (discreta al perder foco/mouse)
         self.idle_opacity = 0.25
@@ -82,7 +83,8 @@ class ResultWindow:
             return btn
 
         self.copy_btn = create_title_btn("Copiar", self._copy_to_clipboard, "#4da3ff")
-        self.collapse_btn = create_title_btn("▲", self._toggle_collapse, "#ffb300")
+        self.pin_btn = create_title_btn("Fijar", self._toggle_pin, "#ffb300")
+        self.collapse_btn = create_title_btn("▼", self._toggle_collapse, "#ffb300")
         self.close_btn = create_title_btn("✕", self.win.destroy, "#ff6b6b")
 
         # Label de estado interno
@@ -131,6 +133,21 @@ class ResultWindow:
         self.text.insert("1.0", "Analizando la captura, un momento...")
         self.text.config(state="disabled")
 
+        # Agarrador de redimensionamiento (resize grip) discreto en la esquina inferior derecha
+        self.grip = tk.Canvas(
+            self.container, width=10, height=10,
+            bg="#121214", bd=0, highlightthickness=0,
+            cursor="size_nw_se"
+        )
+        self.grip.place(relx=1.0, rely=1.0, anchor="se")
+        
+        # Dibujar líneas diagonales clásicas de grip en el canvas
+        self.grip.create_line(10, 4, 4, 10, fill="#4a4a4f")
+        self.grip.create_line(10, 7, 7, 10, fill="#4a4a4f")
+
+        self.grip.bind("<ButtonPress-1>", self._start_resize)
+        self.grip.bind("<B1-Motion>", self._do_resize)
+
         # Binds para opacidad adaptativa en hover
         self.win.bind("<Enter>", self._on_enter)
         self.win.bind("<Leave>", self._on_leave)
@@ -163,6 +180,30 @@ class ResultWindow:
         y = self.win.winfo_y() + dy
         self.win.geometry(f"+{x}+{y}")
 
+    def _start_resize(self, event):
+        self._resize_start_x = event.x_root
+        self._resize_start_y = event.y_root
+        self._resize_start_w = self.win.winfo_width()
+        self._resize_start_h = self.win.winfo_height()
+
+    def _do_resize(self, event):
+        dx = event.x_root - self._resize_start_x
+        dy = event.y_root - self._resize_start_y
+        
+        new_w = max(250, self._resize_start_w + dx)
+        new_h = max(100, self._resize_start_h + dy)
+        
+        x = self.win.winfo_x()
+        y = self.win.winfo_y()
+        
+        if not self.collapsed:
+            self.width = new_w
+            self.height = new_h
+            self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
+        else:
+            self.width = new_w
+            self.win.geometry(f"{self.width}x28+{x}+{y}")
+
     def _copy_to_clipboard(self):
         self.win.clipboard_clear()
         self.win.clipboard_append(self.text.get("1.0", "end-1c"))
@@ -172,41 +213,94 @@ class ResultWindow:
         self.copy_btn.config(text="✓ Copiado", fg="#4caf50")
         self.win.after(1500, lambda: self.copy_btn.config(text="Copiar", fg="#8a8a8f"))
 
+    def _expand(self):
+        x = self.win.winfo_x()
+        y = self.win.winfo_y()
+        self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
+        self.collapse_btn.config(text="▲")
+        self.collapsed = False
+
+    def _collapse(self):
+        x = self.win.winfo_x()
+        y = self.win.winfo_y()
+        self.win.geometry(f"{self.width}x28+{x}+{y}")
+        self.collapse_btn.config(text="▼")
+        self.collapsed = True
+
+    def _toggle_pin(self):
+        self.is_pinned = not self.is_pinned
+        if self.is_pinned:
+            self.pin_btn.config(text="Fijado", fg="#4caf50")
+            if self.collapsed:
+                self._expand()
+        else:
+            self.pin_btn.config(text="Fijar", fg="#8a8a8f")
+            self._check_mouse_and_collapse()
+
+    def _is_mouse_inside(self) -> bool:
+        try:
+            x, y = self.win.winfo_pointerxy()
+            widget_under_mouse = self.win.winfo_containing(x, y)
+            if widget_under_mouse:
+                current = widget_under_mouse
+                while current:
+                    if current == self.win:
+                        return True
+                    current = getattr(current, 'master', None)
+        except Exception:
+            pass
+        return False
+
+    def _check_mouse_and_collapse(self):
+        if not self._is_mouse_inside():
+            if not self.collapsed:
+                self._collapse()
+
     def _toggle_collapse(self):
         if self.collapsed:
-            # Expandir a tamaño completo
-            self.win.geometry(f"{self.width}x{self.height}")
-            self.collapse_btn.config(text="▲")
-            self.collapsed = False
+            self._expand()
+            self.is_pinned = True
+            self.pin_btn.config(text="Fijado", fg="#4caf50")
         else:
-            # Colapsar a barra de título
-            self.width = self.win.winfo_width()
-            self.height = self.win.winfo_height()
-            self.win.geometry(f"{self.width}x28")
-            self.collapse_btn.config(text="▼")
-            self.collapsed = True
+            self._collapse()
+            self.is_pinned = False
+            self.pin_btn.config(text="Fijar", fg="#8a8a8f")
 
     def _on_enter(self, event):
         try:
             self.win.attributes("-alpha", self.active_opacity)
         except tk.TclError:
             pass
+        if not self.is_pinned and self.collapsed:
+            self._expand()
 
     def _on_leave(self, event):
-        # Asegurarse de que el cursor realmente haya salido de los límites de la ventana
-        x, y = self.win.winfo_pointerxy()
-        rx = self.win.winfo_rootx()
-        ry = self.win.winfo_rooty()
-        rw = self.win.winfo_width()
-        rh = self.win.winfo_height()
-        
-        if not (rx <= x <= rx + rw and ry <= y <= ry + rh):
+        if not self._is_mouse_inside():
             try:
                 self.win.attributes("-alpha", self.idle_opacity)
             except tk.TclError:
                 pass
+            if not self.is_pinned and not self.collapsed:
+                self._collapse()
+
+    def show_loading(self):
+        self.title_label.config(text="IA Selector - Pensando...", fg="#4da3ff")
+        self.status_label.config(text="Pensando...", fg="#4da3ff")
+        self.text.config(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", "Analizando la captura, un momento...")
+        self.text.config(state="disabled")
+        try:
+            self.win.lift()
+            if self._is_mouse_inside():
+                self.win.attributes("-alpha", self.active_opacity)
+            else:
+                self.win.attributes("-alpha", self.idle_opacity)
+        except Exception:
+            pass
 
     def show_result(self, text: str):
+        self.title_label.config(text="IA Selector - Listo", fg="#4caf50")
         self.status_label.config(text="Respuesta:", fg="#4da3ff")
         self.text.config(state="normal")
         self.text.delete("1.0", "end")
@@ -214,6 +308,7 @@ class ResultWindow:
         self.text.config(state="disabled")
 
     def show_error(self, message: str):
+        self.title_label.config(text="IA Selector - Error", fg="#ff6b6b")
         self.status_label.config(text="Error:", fg="#ff6b6b")
         self.text.config(state="normal")
         self.text.delete("1.0", "end")

@@ -8,3 +8,9 @@ __pycache__/
 # Archivos de agentes de desarrollo
 .agents/
 .gemini/
+
+# Archivos de construcción de PyInstaller
+build/
+dist/
+*.spec
+*.exe
