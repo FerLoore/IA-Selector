@@ -83,9 +83,13 @@ class ResultWindow:
             return btn
 
         self.copy_btn = create_title_btn("Copiar", self._copy_to_clipboard, "#4da3ff")
+        self.quota_btn = create_title_btn("⚡ Cuota", self._show_quota_popup, "#4da3ff")
         self.pin_btn = create_title_btn("Fijar", self._toggle_pin, "#ffb300")
         self.collapse_btn = create_title_btn("▼", self._toggle_collapse, "#ffb300")
         self.close_btn = create_title_btn("✕", self.win.destroy, "#ff6b6b")
+
+        self.last_token_info = None
+        self.last_daily_info = None
 
         # Label de estado interno
         self.status_label = tk.Label(
@@ -299,9 +303,24 @@ class ResultWindow:
         except Exception:
             pass
 
-    def show_result(self, text: str):
+    def _show_quota_popup(self):
+        show_quota_dialog(self.win, token_info=self.last_token_info, daily_info=self.last_daily_info)
+
+    def show_result(self, text: str, token_info: dict | None = None, daily_info: dict | None = None):
         self.title_label.config(text="IA Selector - Listo", fg="#4caf50")
         self.status_label.config(text="Respuesta:", fg="#4da3ff")
+        self.last_token_info = token_info
+        self.last_daily_info = daily_info
+
+        k_disp = f" [{token_info['key_display']}]" if token_info and token_info.get("key_display") else ""
+        if daily_info:
+            tot = token_info.get("total_tokens", daily_info.get("last_tokens", 0)) if token_info else daily_info.get("last_tokens", 0)
+            rem = daily_info.get("remaining_requests", 0)
+            self.quota_btn.config(text=f"⚡ {tot} tok · {rem} rest.{k_disp}")
+        elif token_info:
+            tot = token_info.get("total_tokens", 0)
+            self.quota_btn.config(text=f"⚡ {tot} tok{k_disp}")
+
         self.text.config(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", text)
@@ -314,3 +333,97 @@ class ResultWindow:
         self.text.delete("1.0", "end")
         self.text.insert("1.0", message)
         self.text.config(state="disabled")
+
+
+def show_quota_dialog(parent_root, token_info: dict | None = None, daily_info: dict | None = None):
+    """Muestra una ventana modal con el estado detallado de tokens y cuotas de Gemini."""
+    import config
+    if daily_info is None:
+        daily_info = config.get_daily_usage()
+
+    dlg = tk.Toplevel(parent_root)
+    dlg.title("Cuota y Tokens de Gemini")
+    dlg.geometry("400x330")
+    dlg.configure(bg="#121214")
+    dlg.attributes("-topmost", True)
+    dlg.resizable(False, False)
+
+    # Centrar en pantalla
+    dlg.update_idletasks()
+    sw = dlg.winfo_screenwidth()
+    sh = dlg.winfo_screenheight()
+    x = max(50, (sw - 400) // 2)
+    y = max(50, (sh - 330) // 2)
+    dlg.geometry(f"+{x}+{y}")
+
+    frame = tk.Frame(dlg, bg="#18181b", bd=1, relief="solid")
+    frame.pack(fill="both", expand=True, padx=12, pady=12)
+
+    header = tk.Label(
+        frame, text="⚡ Estado de Cuota y Tokens",
+        fg="#ffffff", bg="#18181b", font=("Segoe UI", 11, "bold")
+    )
+    header.pack(pady=(12, 4))
+
+    sub_header = tk.Label(
+        frame, text="Capa Gratuita de Google AI Studio (Gemini)",
+        fg="#8a8a8f", bg="#18181b", font=("Segoe UI", 8)
+    )
+    sub_header.pack(pady=(0, 10))
+
+    info_frame = tk.Frame(frame, bg="#121214", padx=12, pady=10)
+    info_frame.pack(fill="x", padx=12)
+
+    req_today = daily_info.get("requests_today", 0)
+    rem_req = daily_info.get("remaining_requests", 1500)
+    lim_req = daily_info.get("limit", 1500)
+    tokens_today = daily_info.get("tokens_today", 0)
+    last_tokens = daily_info.get("last_tokens", 0)
+
+    if token_info and token_info.get("total_tokens"):
+        p_tok = token_info.get("prompt_tokens", 0)
+        c_tok = token_info.get("output_tokens", 0)
+        tot_tok = token_info.get("total_tokens", last_tokens)
+        last_str = f"{tot_tok} tok (Entrada: {p_tok} | Salida: {c_tok})"
+    else:
+        last_str = f"{last_tokens} tokens" if last_tokens else "Aún sin consultas"
+
+    keys_pool = config.load_api_keys_pool()
+    if keys_pool:
+        key_mode = f"Pool .txt ({len(keys_pool)} claves)"
+        if token_info and token_info.get("key_display"):
+            key_mode += f" · {token_info['key_display']}"
+    else:
+        key_mode = "Clave individual (config.json)"
+
+    rows = [
+        ("Modo de API Keys:", key_mode, "#4da3ff"),
+        ("Consultas restantes hoy:", f"{rem_req:,} / {lim_req:,}", "#4caf50"),
+        ("Consultas realizadas hoy:", f"{req_today:,}", "#e3e3e6"),
+        ("Tokens última captura:", last_str, "#e3e3e6"),
+        ("Tokens acumulados hoy:", f"{tokens_today:,} tokens", "#ffb300"),
+        ("Límites por minuto:", "15 RPM | 1,000,000 TPM", "#8a8a8f"),
+    ]
+
+    for label, val, color in rows:
+        row = tk.Frame(info_frame, bg="#121214")
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row, text=label, fg="#8a8a8f", bg="#121214", font=("Segoe UI", 9)
+        ).pack(side="left")
+        tk.Label(
+            row, text=val, fg=color, bg="#121214", font=("Segoe UI", 9, "bold")
+        ).pack(side="right")
+
+    footer_note = tk.Label(
+        frame, text="* La cuota diaria de 1,500 consultas se reinicia a medianoche.",
+        fg="#6a6a6f", bg="#18181b", font=("Segoe UI", 8)
+    )
+    footer_note.pack(pady=(10, 8))
+
+    close_btn = tk.Button(
+        frame, text="Entendido", bg="#252528", fg="#ffffff", activebackground="#38383c",
+        activeforeground="#ffffff", relief="flat", font=("Segoe UI", 9),
+        command=dlg.destroy, cursor="hand2", padx=12, pady=3
+    )
+    close_btn.pack(pady=(0, 8))

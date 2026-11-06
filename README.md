@@ -40,9 +40,10 @@ La primera vez te pedirá que pegues tu API key de Gemini (queda guardada en `co
    - **Reutilización**: Al hacer una nueva consulta, la ventana de respuesta anterior y el brillo verde en pantalla se cerrarán automáticamente.
 6. **Brillo en Pantalla (Detección de Opción Múltiple)**: Si la captura contiene una pregunta o encuesta de opción múltiple, la IA calculará la posición de la opción correcta y el sistema dibujará un brillo translúcido verde de forma temporal directamente sobre la respuesta correcta en la pantalla.
 7. **Clic derecho** sobre el botón flotante:
+   - *Ver cuota y tokens* — Muestra el consumo de tokens y las consultas restantes del día.
    - *Cambiar área* — Vuelve a definir otra zona de la pantalla.
-   - *Cambiar atajo de teclado* — Define una combinación de teclas personalizada global (ej. `ctrl+shift+s`, `f9`, etc.) de forma interactiva.
-   - *Cambiar API key* — Reemplaza la API key guardada.
+   - *Cambiar API key* — Reemplaza la API key individual guardada.
+   - *Directorio archivo API keys (.txt)* — Configura la ruta de un archivo `.txt` (o directorio que lo contenga) con múltiples API keys de Gemini (una por línea). Si una clave agota su cuota de tokens, la aplicación rotará automáticamente a la siguiente. Si dejas el campo vacío, volverá a usar la API key individual.
    - *Salir* — Cierra la aplicación por completo.
 
 El marco blanco no bloquea clics: puedes seguir usando lo que está debajo de la zona de captura con total normalidad.
@@ -51,16 +52,42 @@ El marco blanco no bloquea clics: puedes seguir usando lo que está debajo de la
 
 La aplicación utiliza el modelo **Gemini 3.5 Flash**, el cual cuenta con una cuota gratuita completa (de hasta 1,500 solicitudes por día). Si alcanzas el límite de tasa por minuto, espera unos segundos antes de realizar la siguiente consulta.
 
-## 6. (Opcional) Convertirla en un .exe
+## 6. (Opcional) Compilar y generar el archivo .exe
 
-Si quieres abrirla con doble clic sin usar la terminal:
+Si quieres generar el ejecutable para abrir la aplicación directamente con doble clic sin necesidad de abrir una consola o terminal:
 
+### Paso 1: Instalar PyInstaller (si aún no lo tienes)
 ```powershell
-pyinstaller --clean IA-Selector.spec
-python -m PyInstaller --clean IA-Selector.spec
+pip install pyinstaller
 ```
 
-El ejecutable queda en la carpeta `dist/`. Cópialo junto con tu `config.json` y `logoTraslucido.png` en el mismo directorio.
+### Paso 2: Compilar el ejecutable usando el archivo .spec (Recomendado)
+El proyecto ya cuenta con el archivo de configuración `IA-Selector.spec` preparado con todas las opciones optimizadas (modo sin consola negra y assets integrados):
+
+```powershell
+python -m PyInstaller --clean IA-Selector.spec
+```
+*(O si tienes el comando directo disponible en tu PATH: `pyinstaller --clean IA-Selector.spec`)*
+
+### Paso 3: Ubicación y ejecución del .exe
+* El archivo compilado quedará listo en la carpeta `dist/`:
+  ```text
+  dist/IA-Selector.exe
+  ```
+* Asegúrate de que el archivo `config.json` esté en esa misma carpeta (o déjalo que la app lo genere automáticamente la primera vez).
+* Puedes ejecutarlo directamente desde PowerShell con:
+  ```powershell
+  .\dist\IA-Selector.exe
+  ```
+  O haciendo doble clic sobre **`IA-Selector.exe`** en el Explorador de Archivos de Windows.
+
+---
+
+### Alternativa: Generar el .exe desde cero por comando
+Si alguna vez no tienes el archivo `IA-Selector.spec`, puedes compilarlo directamente con este comando:
+```powershell
+pyinstaller --noconsole --onefile --clean --add-data "logoTraslucido.png;." --name "IA-Selector" main.py
+```
 
 ## Estructura del proyecto
 
