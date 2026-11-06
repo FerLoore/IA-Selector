@@ -8,10 +8,12 @@ Flujo:
 4. Clics siguientes: captura esa misma área y la manda a Gemini.
 5. Clic derecho sobre el botón: menú para cambiar de área o salir.
 """
+import hashlib
 import io
 import os
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 
@@ -46,8 +48,10 @@ class App:
         except Exception:
             pass
 
+        self.api_keys_pool = config.load_api_keys_pool()
+        self.current_key_idx = 0
         self.api_key = config.load_api_key()
-        if not self.api_key:
+        if not self.api_key and not self.api_keys_pool:
             self._ask_for_api_key()
 
         self.region = None  # (left, top, right, bottom)
@@ -56,6 +60,9 @@ class App:
         self.current_highlight = None
         self.hover_timer = None
         self.is_analyzing = False
+        self.last_capture_hash = None
+        self.last_result = None  # (answer, box)
+        self.last_trigger_time = 0.0
 
         # Cargar y registrar el atajo de teclado global
         self.hotkey = config.load_hotkey()
@@ -138,9 +145,10 @@ class App:
 
         # Clic derecho: menú
         self.menu = tk.Menu(self.btn_win, tearoff=0)
+        self.menu.add_command(label="Ver cuota y tokens", command=self._show_quota_window)
         self.menu.add_command(label="Cambiar área", command=self._change_region)
         self.menu.add_command(label="Cambiar API key", command=self._ask_for_api_key)
-        self.menu.add_command(label="Cambiar atajo de teclado", command=self._change_hotkey)
+        self.menu.add_command(label="Directorio archivo API keys (.txt)", command=self._configure_keys_file)
         self.menu.add_separator()
         self.menu.add_command(label="Salir", command=self.root.destroy)
         self.btn.bind("<Button-3>", self._show_menu)
@@ -182,11 +190,11 @@ class App:
         except tk.TclError:
             pass
             
-        # Iniciar temporizador para activar la IA automáticamente al pasar el mouse (hover)
-        # Esperamos 250ms para evitar disparos accidentales mientras arrastras el botón
+        # Iniciar temporizador para activar la IA automáticamente al mantener el mouse (hover)
+        # Esperamos 1500ms (1.5s) para evitar disparos accidentales al pasar el mouse por encima
         if self.hover_timer:
             self.root.after_cancel(self.hover_timer)
-        self.hover_timer = self.root.after(250, self._on_hover_trigger)
+        self.hover_timer = self.root.after(1500, self._on_hover_trigger)
 
     def _on_button_leave(self, event):
         try:
@@ -201,6 +209,9 @@ class App:
 
     # ---------- Lógica principal ----------
 
+    def _has_api_keys(self) -> bool:
+        return bool(self.api_keys_pool or self.api_key)
+
     def _on_button_click(self):
         if self._was_drag:
             return  # fue un arrastre, no un clic real
@@ -210,9 +221,9 @@ class App:
         if self.is_analyzing:
             return
             
-        if not self.api_key:
+        if not self._has_api_keys():
             self._ask_for_api_key()
-            if not self.api_key:
+            if not self._has_api_keys():
                 return
         if self.region is None:
             self._pick_region()
@@ -224,9 +235,9 @@ class App:
         if self.is_analyzing:
             return
             
-        if not self.api_key:
+        if not self._has_api_keys():
             self._ask_for_api_key()
-            if not self.api_key:
+            if not self._has_api_keys():
                 return
         if self.region is None:
             self._pick_region()
@@ -240,6 +251,8 @@ class App:
 
     def _on_region_selected(self, bbox):
         self.region = bbox
+        self.last_capture_hash = None
+        self.last_result = None
         if self.fixed_frame:
             self.fixed_frame.update_region(bbox)
         else:
@@ -249,64 +262,102 @@ class App:
         self._pick_region()
 
     def _capture_and_analyze(self):
+        # Debounce: evitar peticiones consecutivas con menos de 1.2 segundos de diferencia
+        now = time.time()
+        if now - self.last_trigger_time < 1.2:
+            return
+        self.last_trigger_time = now
+
         left, top, right, bottom = self.region
         screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
+
+        # Optimizar imagen: máx 768px (consume solo 1 tile = 258 tokens en Gemini)
+        # y compresión rápida con BILINEAR y calidad 75
+        img = screenshot.convert("RGB")
+        max_dim = 768
+        w, h = img.size
+        if max(w, h) > max_dim:
+            scale = max_dim / float(max(w, h))
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+            img = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+
         buffer = io.BytesIO()
-        screenshot.save(buffer, format="PNG")
+        img.save(buffer, format="JPEG", quality=75)
         image_bytes = buffer.getvalue()
+
+        # Comprobar si la captura es idéntica a la anterior (Caché local - 0 cuota consumida)
+        img_hash = hashlib.md5(image_bytes).hexdigest()
 
         # Si ya existe la ventana de resultados y está abierta, la reutilizamos y conservamos su posición
         if self.current_result_win and self.current_result_win.win.winfo_exists():
             result_win = self.current_result_win
-            result_win.show_loading()
         else:
             result_win = ResultWindow(self.root)
             self.current_result_win = result_win
-        
+
+        if self.last_capture_hash == img_hash and self.last_result is not None:
+            cached_answer, cached_tok = self.last_result
+            daily_info = config.get_daily_usage()
+            result_win.show_result(
+                f"{cached_answer}\n\n[⚡ Resultado en caché local - 0 cuota consumida]",
+                token_info={"total_tokens": 0, "prompt_tokens": 0, "output_tokens": 0},
+                daily_info=daily_info,
+            )
+            return
+
+        result_win.show_loading()
         self.is_analyzing = True
 
         def worker():
+            if self.api_keys_pool:
+                keys_to_use = self.api_keys_pool
+                start_idx = self.current_key_idx
+            else:
+                keys_to_use = self.api_key
+                start_idx = 0
+
             try:
-                answer, box = ask_about_image(image_bytes, self.api_key)
+                answer, token_info, used_idx = ask_about_image(
+                    image_bytes,
+                    keys_to_use,
+                    mime_type="image/jpeg",
+                    start_key_index=start_idx,
+                )
             except Exception as exc:  # noqa: BLE001
                 err_msg = str(exc)
                 self.root.after(0, lambda: result_win.show_error(err_msg))
                 self.root.after(0, self._set_analyzing_false)
                 return
-            self.root.after(0, lambda: result_win.show_result(answer))
-            if box:
-                self.root.after(0, lambda: self._highlight_correct_option(box))
+
+            if self.api_keys_pool:
+                self.current_key_idx = used_idx
+                if token_info:
+                    token_info["key_display"] = f"Key #{used_idx + 1}/{len(self.api_keys_pool)}"
+
+            tokens_spent = token_info.get("total_tokens", 0) if token_info else 0
+            daily_info = config.record_usage(tokens_spent)
+
+            self.last_capture_hash = img_hash
+            self.last_result = (answer, token_info)
+
+            self.root.after(0, lambda: result_win.show_result(answer, token_info=token_info, daily_info=daily_info))
             self.root.after(0, self._set_analyzing_false)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _show_quota_window(self):
+        from result_window import show_quota_dialog
+        daily_info = config.get_daily_usage()
+        last_tok = self.last_result[1] if self.last_result else None
+        show_quota_dialog(self.root, token_info=last_tok, daily_info=daily_info)
 
     def _set_analyzing_false(self):
         self.is_analyzing = False
 
     def _highlight_correct_option(self, box):
-        # Cerrar el brillo anterior si existe y está abierto
-        if self.current_highlight and self.current_highlight.win.winfo_exists():
-            try:
-                self.current_highlight.win.destroy()
-            except Exception:
-                pass
-        self.current_highlight = None
-
-        if not self.region:
-            return
-        left, top, right, bottom = self.region
-        w = right - left
-        h = bottom - top
-        
-        # box es [ymin, xmin, ymax, xmax] normalizados en [0, 1000]
-        ymin, xmin, ymax, xmax = box
-        
-        opt_left = left + int((xmin / 1000.0) * w)
-        opt_top = top + int((ymin / 1000.0) * h)
-        opt_right = left + int((xmax / 1000.0) * w)
-        opt_bottom = top + int((ymax / 1000.0) * h)
-        
-        self.current_highlight = OptionHighlight(self.root, (opt_left, opt_top, opt_right, opt_bottom))
+        # Desactivado a petición: no marcar con verde en pantalla
+        pass
 
     def _register_global_hotkey(self):
         try:
@@ -327,49 +378,64 @@ class App:
     def _on_hotkey_pressed(self):
         if self.is_analyzing:
             return
-        if not self.api_key:
+        if not self._has_api_keys():
             self._ask_for_api_key()
-            if not self.api_key:
+            if not self._has_api_keys():
                 return
         if self.region is None:
             self._pick_region()
         else:
             self._capture_and_analyze()
 
-    def _change_hotkey(self):
+    def _configure_keys_file(self):
         self.root.deiconify()
         self.root.withdraw()
-        
-        # Le pedimos al usuario el nuevo atajo
-        new_key = simpledialog.askstring(
-            "Configurar Atajo de Teclado",
-            f"Escribe el nuevo atajo global (ej: ctrl+shift+s, ctrl+alt+q):\n\nAtajo actual: {self.hotkey}",
-            parent=self.root
+
+        current = config.load_api_keys_file() or ""
+        prompt_text = (
+            "Ingresa la ruta o directorio del archivo .txt con tus API Keys de Gemini\n"
+            "(una clave por línea):\n\n"
+            f"Ruta actual: {current if current else '(Ninguna - usando API key única)'}\n\n"
+            "• Pega la ruta al archivo .txt o al directorio que lo contiene.\n"
+            "• Si dejas el campo vacío y presionas Aceptar, se desactivará el archivo y se usará la API key única."
         )
-        
-        if new_key is not None:
-            new_key = new_key.strip().lower()
-            if new_key:
-                # Validar el atajo intentando parsearlo
-                try:
-                    import keyboard
-                    keyboard.parse_hotkey(new_key)
-                    
-                    # Guardar y registrar
-                    config.save_hotkey(new_key)
-                    self.hotkey = new_key
-                    self._register_global_hotkey()
-                    
+
+        path_input = simpledialog.askstring(
+            "Archivo de API Keys (.txt)",
+            prompt_text,
+            initialvalue=current,
+            parent=self.root,
+        )
+
+        if path_input is not None:
+            clean_path = path_input.strip().strip('"').strip("'")
+            if not clean_path:
+                config.save_api_keys_file(None)
+                self.api_keys_pool = []
+                self.current_key_idx = 0
+                messagebox.showinfo(
+                    "Modo API Key Única",
+                    "Se desactivó el archivo .txt.\nLa aplicación ahora usará la API key individual guardada en 'Cambiar API key'.",
+                    parent=self.root,
+                )
+            else:
+                config.save_api_keys_file(clean_path)
+                keys = config.load_api_keys_pool()
+                if keys:
+                    self.api_keys_pool = keys
+                    self.current_key_idx = 0
                     messagebox.showinfo(
-                        "Atajo configurado",
-                        f"Atajo de teclado global guardado y activo: {self.hotkey}",
-                        parent=self.root
+                        "API Keys Cargadas",
+                        f"¡Éxito! Se cargaron {len(keys)} API keys desde:\n{clean_path}\n\n"
+                        "Si una clave agota su cuota o tokens (429), el sistema cambiará automáticamente a la siguiente clave del archivo.",
+                        parent=self.root,
                     )
-                except Exception as e:
-                    messagebox.showerror(
-                        "Atajo inválido",
-                        f"El atajo '{new_key}' no es válido.\nError: {e}\n\nIntenta algo como 'ctrl+shift+s' o 'ctrl+alt+q'.",
-                        parent=self.root
+                else:
+                    messagebox.showwarning(
+                        "Sin claves encontradas",
+                        f"No se pudieron encontrar claves válidas en la ruta:\n{clean_path}\n\n"
+                        "Asegúrate de que el archivo termine en .txt y tenga una API key por línea.",
+                        parent=self.root,
                     )
 
 

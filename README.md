@@ -40,9 +40,10 @@ La primera vez te pedirá que pegues tu API key de Gemini (queda guardada en `co
    - **Reutilización**: Al hacer una nueva consulta, la ventana de respuesta anterior y el brillo verde en pantalla se cerrarán automáticamente.
 6. **Brillo en Pantalla (Detección de Opción Múltiple)**: Si la captura contiene una pregunta o encuesta de opción múltiple, la IA calculará la posición de la opción correcta y el sistema dibujará un brillo translúcido verde de forma temporal directamente sobre la respuesta correcta en la pantalla.
 7. **Clic derecho** sobre el botón flotante:
+   - *Ver cuota y tokens* — Muestra el consumo de tokens y las consultas restantes del día.
    - *Cambiar área* — Vuelve a definir otra zona de la pantalla.
-   - *Cambiar atajo de teclado* — Define una combinación de teclas personalizada global (ej. `ctrl+shift+s`, `f9`, etc.) de forma interactiva.
-   - *Cambiar API key* — Reemplaza la API key guardada.
+   - *Cambiar API key* — Reemplaza la API key individual guardada.
+   - *Directorio archivo API keys (.txt)* — Configura la ruta de un archivo `.txt` (o directorio que lo contenga) con múltiples API keys de Gemini (una por línea). Si una clave agota su cuota de tokens, la aplicación rotará automáticamente a la siguiente. Si dejas el campo vacío, volverá a usar la API key individual.
    - *Salir* — Cierra la aplicación por completo.
 
 El marco blanco no bloquea clics: puedes seguir usando lo que está debajo de la zona de captura con total normalidad.
