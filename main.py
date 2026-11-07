@@ -145,6 +145,7 @@ class App:
 
         # Clic derecho: menú
         self.menu = tk.Menu(self.btn_win, tearoff=0)
+        self.menu.add_command(label="📍 Ver dónde está el marco (Ctrl+Shift+F)", command=self._show_frame_location)
         self.menu.add_command(label="Ver cuota y tokens", command=self._show_quota_window)
         self.menu.add_command(label="Cambiar área", command=self._change_region)
         self.menu.add_command(label="Cambiar API key", command=self._ask_for_api_key)
@@ -152,6 +153,7 @@ class App:
         self.menu.add_separator()
         self.menu.add_command(label="Salir", command=self.root.destroy)
         self.btn.bind("<Button-3>", self._show_menu)
+        self.btn.bind("<Button-2>", lambda e: self._show_frame_location())
 
         # Eventos hover para cambiar la opacidad
         self.btn.bind("<Enter>", self._on_button_enter)
@@ -257,6 +259,17 @@ class App:
             self.fixed_frame.update_region(bbox)
         else:
             self.fixed_frame = FixedFrame(self.root, bbox)
+        # Mostrarlo temporalmente (2.5s) para ver dónde quedó y luego desaparece solo
+        self.fixed_frame.flash_location(2500)
+
+    def _show_frame_location(self):
+        if not self.region:
+            self._pick_region()
+            return
+        if not self.fixed_frame:
+            self.fixed_frame = FixedFrame(self.root, self.region)
+        # Muestra el marco claramente durante 2.5s y se desvanece por completo
+        self.fixed_frame.flash_location(2500)
 
     def _change_region(self):
         self._pick_region()
@@ -366,14 +379,15 @@ class App:
         except Exception:
             pass
 
-        if self.hotkey:
-            try:
-                import keyboard
-                # Registramos el atajo global. Dado que corre en un hilo secundario de la librería keyboard,
-                # usamos self.root.after(0, ...) para invocar la lógica principal de forma segura en el hilo de Tkinter.
+        try:
+            import keyboard
+            if self.hotkey:
+                # Registramos el atajo global de captura y análisis.
                 keyboard.add_hotkey(self.hotkey, lambda: self.root.after(0, self._on_hotkey_pressed))
-            except Exception as e:
-                print(f"Error registrando atajo: {e}")
+            # Atajo global para iluminar y saber dónde está el marco (desaparece solo tras 2.5s)
+            keyboard.add_hotkey("ctrl+shift+f", lambda: self.root.after(0, self._show_frame_location))
+        except Exception as e:
+            print(f"Error registrando atajo: {e}")
 
     def _on_hotkey_pressed(self):
         if self.is_analyzing:

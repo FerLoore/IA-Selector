@@ -31,16 +31,17 @@ La primera vez te pedirá que pegues tu API key de Gemini (queda guardada en `co
 
 1. **Botón Flotante**: Aparece un logotipo translúcido flotante en la pantalla. Puedes arrastrarlo libremente a donde quieras. Se vuelve más visible (95% opacidad) al pasar el mouse por encima y vuelve a ser discreto (35% opacidad) cuando lo retiras.
 2. **Atajo de Teclado Global**: Puedes presionar el atajo **`ctrl+shift+x`** (atajo predeterminado) en cualquier momento para capturar y analizar la región seleccionada al instante, sin necesidad de hacer clic sobre la esfera flotante.
-3. **Primer Uso / Selección**: La primera vez que haces clic en el botón flotante o presionas el atajo de teclado, la pantalla se oscurecerá un poco. Arrastra el mouse para marcar el área que quieres que la IA lea. Al soltar, esa zona quedará definida por un marco blanco sutil que solo se vuelve visible cuando el mouse está cerca.
-4. **Consultas Siguientes**: Cada vez que hagas clic en el botón o uses el atajo de teclado, se capturará lo que esté debajo del marco en ese momento y se enviará a la IA. La ventana de respuestas aparecerá en segundos.
-5. **Ventana de Respuestas Premium y Discreta**:
+3. **Primer Uso / Selección**: La primera vez que haces clic en el botón flotante o presionas el atajo de teclado, la pantalla se oscurecerá un poco. Arrastra el mouse para marcar el área que quieres que la IA lea. Al soltar, esa zona quedará definida. El marco es **completamente invisible** por defecto (incluso si pasas el mouse por encima) para máxima discreción.
+4. **Visibilidad del Marco a Pedido**: Puedes presionar **`ctrl+shift+f`** o elegir *"Mostrar marco / Ocultar marco"* en el menú del botón flotante para hacerlo visible cuando necesites ver dónde está ubicado, y volverlo a ocultar con la misma tecla.
+5. **Consultas Siguientes**: Cada vez que hagas clic en el botón o uses el atajo de teclado (**`ctrl+shift+x`**), se capturará lo que esté debajo del marco en ese momento y se enviará a la IA. La ventana de respuestas aparecerá en segundos.
+6. **Ventana de Respuestas Premium y Discreta**:
    - **Opacidad Adaptativa**: La ventana tiene opacidad adaptativa. Es muy translúcida (25% opacidad) cuando no interactúas con ella y se vuelve legible (95% opacidad) al pasar el mouse.
    - **Colapsable**: Puedes colapsar la respuesta presionando el botón `▲` / `▼` en la barra de título para ocultar el contenido de inmediato en una pequeña barra de 28px.
    - **Copiar al Portapapeles**: Incluye un botón rápido de "Copiar" que copia el texto de respuesta al portapapeles.
-   - **Reutilización**: Al hacer una nueva consulta, la ventana de respuesta anterior y el brillo verde en pantalla se cerrarán automáticamente.
-6. **Brillo en Pantalla (Detección de Opción Múltiple)**: Si la captura contiene una pregunta o encuesta de opción múltiple, la IA calculará la posición de la opción correcta y el sistema dibujará un brillo translúcido verde de forma temporal directamente sobre la respuesta correcta en la pantalla.
+   - **Contador de Cuota y Tokens**: Botón interactivo `⚡` en la barra que muestra los tokens consumidos y las consultas restantes del día.
 7. **Clic derecho** sobre el botón flotante:
-   - *Ver cuota y tokens* — Muestra el consumo de tokens y las consultas restantes del día.
+   - *Mostrar marco / Ocultar marco* — Alterna la visibilidad del marco fijo (también con `ctrl+shift+f`).
+   - *Ver cuota y tokens* — Muestra el consumo detallado de tokens y consultas restantes del día.
    - *Cambiar área* — Vuelve a definir otra zona de la pantalla.
    - *Cambiar API key* — Reemplaza la API key individual guardada.
    - *Directorio archivo API keys (.txt)* — Configura la ruta de un archivo `.txt` (o directorio que lo contenga) con múltiples API keys de Gemini (una por línea). Si una clave agota su cuota de tokens, la aplicación rotará automáticamente a la siguiente. Si dejas el campo vacío, volverá a usar la API key individual.
