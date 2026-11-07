@@ -85,7 +85,8 @@ class RegionPicker:
 
 
 class FixedFrame:
-    """Marco sutil y semi-transparente alrededor de la región elegida. No bloquea clics."""
+    """Marco alrededor de la región elegida. Permanece 100% invisible por defecto
+    y solo aparece temporalmente al presionar el botón o comando para saber dónde está."""
 
     def __init__(self, root: tk.Tk, bbox):
         self.root = root
@@ -94,9 +95,9 @@ class FixedFrame:
 
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
-        self.current_alpha = 0.0
+        self._hide_timer = None
         try:
-            self.win.attributes("-alpha", self.current_alpha)  # Empezar completamente transparente (0%)
+            self.win.attributes("-alpha", 0.0)  # Invisible por defecto (0%)
         except tk.TclError:
             pass
 
@@ -114,9 +115,6 @@ class FixedFrame:
         self.win.update_idletasks()
         make_click_through(self.win)
 
-        # Iniciar el bucle de seguimiento de distancia del mouse
-        self._poll_mouse()
-
     def set_region(self, bbox):
         left, top, right, bottom = bbox
         self.bbox = bbox
@@ -126,12 +124,11 @@ class FixedFrame:
         self.canvas.delete("all")
         w = self.bbox[2] - self.bbox[0]
         h = self.bbox[3] - self.bbox[1]
-        
-        # Parámetros para un borde redondeado y discreto (color blanco con alpha general de 0.45)
+
         r = 8  # Radio de esquinas redondeadas
         color = "#ffffff"
         width = 2
-        
+
         # Evitar errores si la selección es más pequeña que el doble del radio
         r = min(r, w // 2, h // 2)
 
@@ -155,58 +152,44 @@ class FixedFrame:
         self.win.update_idletasks()
         self._draw_border()
 
-    def destroy(self):
-        self.win.destroy()
+    def flash_location(self, duration_ms: int = 2500):
+        """Muestra el marco claramente (alpha 0.70) para saber dónde está y luego desaparece solo."""
+        if self._hide_timer:
+            try:
+                self.win.after_cancel(self._hide_timer)
+            except Exception:
+                pass
+            self._hide_timer = None
 
-    def _poll_mouse(self):
+        try:
+            self.win.attributes("-alpha", 0.70)
+        except tk.TclError:
+            pass
+
+        self._hide_timer = self.win.after(duration_ms, self._fade_out)
+
+    def _fade_out(self):
         try:
             if not self.win.winfo_exists():
                 return
-        except tk.TclError:
-            return
+            alpha = float(self.win.attributes("-alpha"))
+            if alpha > 0.1:
+                alpha -= 0.1
+                self.win.attributes("-alpha", max(0.0, alpha))
+                self.win.after(35, self._fade_out)
+            else:
+                self.win.attributes("-alpha", 0.0)
+                self._hide_timer = None
+        except Exception:
+            pass
 
-        # Obtener coordenadas absolutas/globales del mouse en pantalla
-        px = self.win.winfo_pointerx()
-        py = self.win.winfo_pointery()
-
-        left, top, right, bottom = self.bbox
-
-        # Calcular la distancia más corta del cursor a los bordes del recuadro
-        # Distancia en X
-        if px < left:
-            dx = left - px
-        elif px > right:
-            dx = px - right
-        else:
-            dx = 0
-
-        # Distancia en Y
-        if py < top:
-            dy = top - py
-        elif py > bottom:
-            dy = py - bottom
-        else:
-            dy = 0
-
-        # Distancia euclidiana aproximada
-        distance = (dx * dx + dy * dy) ** 0.5
-
-        # Si el mouse se acerca a menos de 30px de algún borde, el marco se vuelve visible de forma sutil
-        if distance < 30:
-            target_alpha = 0.35  # Sutil
-        else:
-            target_alpha = 0.0   # Completamente invisible / transparente
-
-        # Suavizado de la transición (easing simple de 25% por paso)
-        if abs(self.current_alpha - target_alpha) > 0.01:
-            self.current_alpha += (target_alpha - self.current_alpha) * 0.25
+    def destroy(self):
+        if self._hide_timer:
             try:
-                self.win.attributes("-alpha", self.current_alpha)
-            except tk.TclError:
+                self.win.after_cancel(self._hide_timer)
+            except Exception:
                 pass
-
-        # Volver a consultar en 50 milisegundos (~20 FPS)
-        self.win.after(50, self._poll_mouse)
+        self.win.destroy()
 
 
 class OptionHighlight:
